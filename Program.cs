@@ -87,18 +87,15 @@ namespace GenerateTSModelsFromCS
 			var output = new StringBuilder();
 			output.Append($"export {outputFile.OutputType} ");
 
+			var className = classType.Name;
+
 			if (classType.GenericParameters.Count > 0)
 			{
-				output
-					.Append(classType.Name.Substring(0, classType.Name.Length - 2))
-					.Append('<')
-					.Append(string.Join(',', classType.GenericParameters.Select(p => p.Name)))
-					.Append('>');
+				className = classType.Name.Substring(0, classType.Name.Length - 2);
+				className += $"<{string.Join(',', classType.GenericParameters.Select(p => p.Name))}>";
 			}
-			else
-			{
-				output.Append(classType.Name);
-			}
+
+			output.Append(className);
 
 			if (classType.BaseType != null && classType.BaseType.Name != "Object")
 			{
@@ -129,6 +126,11 @@ namespace GenerateTSModelsFromCS
 
 				output.AppendLine($"\t{propertyName}{isNullableString}: {ProcessTypeSig(propertyType, typesToFind)};");
 			});
+
+			if (outputFile.OutputType == "class")
+			{
+				output.AppendLine($"\tpublic constructor(init?: Partial<{className}>) {{ Object.assign(this, init); }}");
+			}
 
 			return output.AppendLine("}").ToString();
 		}
