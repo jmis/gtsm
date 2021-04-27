@@ -28,7 +28,19 @@ TypeIncludes and TypeExcludes are regular expressions evaluated against the type
 		],
 		"TypeExcludes": [
 			"App.ViewModels.NotUsedViewModel"
-		]
+		],
+		"OutputType": "interface"
+	}, {
+		"File": "./client/src/server.actions.ts",
+		"Assemblies": [
+			"./server/bin/Debug/net5.0/App.dll",
+			"./server/bin/Debug/net5.0/App.Dep.dll"
+		],
+		"TypeIncludes": [
+			"App.*Actions$"
+		],
+		"TypeExcludes": [],
+		"OutputType": "class"
 	}],
 	"Options": {
 		"CamelCaseProperties": true
