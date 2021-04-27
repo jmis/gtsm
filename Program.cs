@@ -17,6 +17,8 @@ namespace GenerateTSModelsFromCS
 		public string[] Assemblies { get; set; } = Array.Empty<string>();
 		public string[] TypeIncludes { get; set; } = Array.Empty<string>();
 		public string[] TypeExcludes { get; set; } = Array.Empty<string>();
+		public string[] Imports { get; set; } = Array.Empty<string>();
+		public string OutputType { get; set; } = "interface";
 	}
 
 	public record Options
@@ -80,10 +82,10 @@ namespace GenerateTSModelsFromCS
 				.ToString();
 		}
 
-		public static string ProcessClass(TypeDef classType, Queue<TypeSig> typesToFind, Options options)
+		public static string ProcessClass(TypeDef classType, Queue<TypeSig> typesToFind, Options options, OutputFile outputFile)
 		{
 			var output = new StringBuilder();
-			output.Append("export interface ");
+			output.Append($"export {outputFile.OutputType} ");
 
 			if (classType.GenericParameters.Count > 0)
 			{
@@ -131,14 +133,15 @@ namespace GenerateTSModelsFromCS
 			return output.AppendLine("}").ToString();
 		}
 
-		public static void ProcessOutputFile(OutputFile outputFileConfig, Options options)
+		public static void ProcessOutputFile(OutputFile outputFileConfig, Options options, List<Tuple<string, TypeSig>> typesFoundInOtherFiles)
 		{
 			var fileContent = new StringBuilder();
 			var modCtx = ModuleDef.CreateModuleContext();
 			var loadedAssemblies = outputFileConfig.Assemblies.Select(p => ModuleDefMD.Load(p, modCtx)).ToList();
 			var warnings = new StringBuilder();
 			var typesToFind = new Queue<TypeSig>();
-			var foundTypes = new List<string>();
+			var typesFoundForFile = new List<TypeSig>();
+			var typesToImport = new List<Tuple<string, TypeSig>>();
 
 			var allDefinedTypes = loadedAssemblies
 				.SelectMany(a => a.GetTypes())
@@ -154,24 +157,55 @@ namespace GenerateTSModelsFromCS
 			{
 				var currentTypeSig = typesToFind.Dequeue();
 
-				if (foundTypes.Contains(currentTypeSig.FullName)) continue;
-				if (outputFileConfig.TypeExcludes.Any(ti => Regex.IsMatch(currentTypeSig.FullName, ti))) continue;
+				if (typesFoundInOtherFiles.Any(f => f.Item2.FullName == currentTypeSig.FullName))
+				{
+					var match = typesFoundInOtherFiles.First(f => f.Item2.FullName == currentTypeSig.FullName);
+					if (typesToImport.All(t => t.Item2.FullName != match.Item2.FullName)) typesToImport.Add(match);
+					continue;
+				}
+
+				if (typesFoundForFile.Any(f => f.FullName == currentTypeSig.FullName))
+				{
+					continue;
+				}
+
+				if (outputFileConfig.TypeExcludes.Any(ti => Regex.IsMatch(currentTypeSig.FullName, ti)))
+				{
+					continue;
+				}
 
 				if (!allDefinedTypes.ContainsKey(currentTypeSig.FullName))
 				{
-					foundTypes.Add(currentTypeSig.FullName);
+					typesFoundForFile.Add(currentTypeSig);
 					if (!currentTypeSig.IsPrimitive && !currentTypeSig.IsCorLibType && currentTypeSig.FullName != "System.DateTime") warnings.AppendLine("Can't find type " + currentTypeSig.FullName);
 					continue;
 				}
 
 				var currentType = allDefinedTypes[currentTypeSig.FullName];
-				foundTypes.Add(currentTypeSig.FullName);
-				var output = currentType.IsEnum ? ProcessEnum(currentType) : ProcessClass(currentType, typesToFind, options);
+				typesFoundForFile.Add(currentTypeSig);
+				var output = currentType.IsEnum ? ProcessEnum(currentType) : ProcessClass(currentType, typesToFind, options, outputFileConfig);
 				fileContent.AppendLine(output);
 				Console.WriteLine(output);
 			}
 
-			File.WriteAllText(outputFileConfig.File, fileContent.ToString());
+			var imports = new StringBuilder();
+			typesToImport.GroupBy(f => f.Item1).ToList().ForEach(g =>
+			{
+				var fileToImport = new Uri(Path.GetFullPath(Path.Combine(Environment.CurrentDirectory, g.Key)));
+				var currentFile = new Uri(Path.GetFullPath(Path.Combine(Environment.CurrentDirectory, outputFileConfig.File)));
+				var importPath = currentFile.MakeRelativeUri(fileToImport).ToString();
+				importPath = Path.Combine(Path.GetDirectoryName(importPath), Path.GetFileNameWithoutExtension(importPath));
+				if (!importPath.StartsWith(".")) importPath = "./" + importPath;
+				var typeNames = g.ToList().Select(t => t.Item2).Where(t => !t.IsPrimitive && !t.IsCorLibType && t.FullName != "System.DateTime").Select(t => t.TypeName).ToList();
+				imports.Append("import { ").Append(string.Join(", ", typeNames)).AppendLine($" }} from \"{importPath}\";");
+			});
+
+			imports.AppendLine();
+			imports.Append(fileContent);
+
+			typesFoundForFile.ForEach(f => typesFoundInOtherFiles.Add(Tuple.Create(outputFileConfig.File, f)));
+
+			File.WriteAllText(outputFileConfig.File, imports.ToString().Trim());
 			Console.WriteLine(warnings.ToString());
 		}
 
@@ -192,9 +226,11 @@ namespace GenerateTSModelsFromCS
 
 			rootCommand.Handler = CommandHandler.Create<FileInfo>(config =>
 			{
+				Environment.CurrentDirectory = Path.GetDirectoryName(config.FullName);
 				var configRoot = new ConfigurationBuilder().AddJsonFile(config.FullName).AddCommandLine(args).Build();
-				var jsonConfiguration = configRoot.Get<GenerateTSModelsFromCS.GenerateTSModelsFromCSConfiguration>();
-				jsonConfiguration.OutputFiles.ToList().ForEach(file => ProcessOutputFile(file, jsonConfiguration.Options));
+				var jsonConfiguration = configRoot.Get<GenerateTSModelsFromCSConfiguration>();
+				var foundTypes = new List<Tuple<string, TypeSig>>();
+				jsonConfiguration.OutputFiles.ToList().ForEach(file => ProcessOutputFile(file, jsonConfiguration.Options, foundTypes));
 			});
 
 			rootCommand.InvokeAsync(args).Wait();
