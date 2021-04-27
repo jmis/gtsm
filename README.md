@@ -1,5 +1,14 @@
 A command line tool to generate TypeScript models from C# models.
 
+## Features
+- Recursively generate models for types automatically
+- Use regular expressions to include and exclude types
+- Generate multiple files
+  - Import statements created between generated files
+- Scan multiple assemblies
+- Output interfaces or classes
+  - Classes generate with initialization constructors
+
 ## Config File
 Types referenced by models will be recursively included unless explicitly excluded or the type is not found in the listed assemblies.
 
