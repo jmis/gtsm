@@ -77,7 +77,7 @@ namespace GenerateTSModelsFromCS
 				.Append(enumType.Name)
 				.AppendLine(" {")
 				.Append('\t')
-				.AppendLine(string.Join(",\r\n\t", enumType.Fields.Where(f => f.IsLiteral).Select(f => f.Name).ToList()))
+				.AppendLine(string.Join(",\r\n\t", enumType.Fields.Where(f => f.IsLiteral).Select(f => $"{f.Name} = \"{f.Name.ToCamelCase()}\"").ToList()))
 				.AppendLine("}")
 				.ToString();
 		}
@@ -107,13 +107,7 @@ namespace GenerateTSModelsFromCS
 			classType.Properties.Where(p => p.PropertySig.RetType.TypeName != "Type").ToList().ForEach(p =>
 			{
 				var propertyName = p.Name.ToString();
-
-				if (options.CamelCaseProperties)
-				{
-					var firstChar = char.ToLower(propertyName[0]);
-					propertyName = propertyName.Remove(0, 1);
-					propertyName = firstChar + propertyName;
-				}
+				propertyName = options.CamelCaseProperties ? propertyName.ToCamelCase() : propertyName;
 
 				var propertyType = p.PropertySig.RetType;
 				var isNullableString = "";
@@ -236,6 +230,22 @@ namespace GenerateTSModelsFromCS
 			});
 
 			rootCommand.InvokeAsync(args).Wait();
+		}
+	}
+
+	public static class GeneralExtensions
+	{
+		public static string ToCamelCase(this string s)
+		{
+			var firstChar = char.ToLower(s[0]);
+			s = s.Remove(0, 1);
+			s = firstChar + s;
+			return s;
+		}
+
+		public static string ToCamelCase(this UTF8String encodedString)
+		{
+			return encodedString.ToString().ToCamelCase();
 		}
 	}
 }
