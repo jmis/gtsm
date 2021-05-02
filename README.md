@@ -1,4 +1,4 @@
-A command line tool to generate TypeScript models from C# models.
+A command line tool to generate TypeScript models from C# models.  GTSM does not require you to add anything to your code.  C# types are found via regular expressions specified in a config file.
 
 ## Features
 - Recursively generate models for types automatically
@@ -13,6 +13,8 @@ A command line tool to generate TypeScript models from C# models.
 Types referenced by models will be recursively included unless explicitly excluded or the type is not found in the listed assemblies.
 
 TypeIncludes and TypeExcludes are regular expressions evaluated against the types full name (namespace plus type name).
+
+All paths are relative to the config file.
 
 ```
 {
@@ -48,12 +50,12 @@ TypeIncludes and TypeExcludes are regular expressions evaluated against the type
 }
 ```
 
-## Usage
+## Run
 ```
-gtsm -c <path to config file>
+dotnet run -- -c <path to config file>
 ```
 
-## Build
+## Publish
 Produces a platform-specific single file that does not require dotnet core to be installed.
 ```
 dotnet publish -o ./out/ -r <platform> -c Publish
