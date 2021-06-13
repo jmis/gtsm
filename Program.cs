@@ -129,6 +129,15 @@ namespace GenerateTSModelsFromCS
 			return output.AppendLine("}").ToString();
 		}
 
+		public static string CreateStubClass(string className, OutputFile outputFile)
+		{
+			var output = new StringBuilder();
+			output.Append($"export {outputFile.OutputType} ");
+			output.Append(className);
+			output.AppendLine(" {");
+			return output.AppendLine("}").ToString();
+		}
+
 		public static void ProcessOutputFile(OutputFile outputFileConfig, Options options, List<Tuple<string, TypeSig>> typesFoundInOtherFiles)
 		{
 			var fileContent = new StringBuilder();
@@ -146,8 +155,11 @@ namespace GenerateTSModelsFromCS
 
 			allDefinedTypes.Values
 				.Where(t => outputFileConfig.TypeIncludes.Any(ti => Regex.IsMatch(t.FullName, ti)))
+				.Where(t => outputFileConfig.TypeExcludes.All(te => !Regex.IsMatch(t.FullName, te)))
 				.ToList()
 				.ForEach(t => typesToFind.Enqueue(t.ToTypeSig()));
+
+			typesToFind.OrderBy(x => x.FullName).ToList().ForEach(x => Console.WriteLine(x.FullName));
 
 			while (typesToFind.Any())
 			{
@@ -167,6 +179,7 @@ namespace GenerateTSModelsFromCS
 
 				if (outputFileConfig.TypeExcludes.Any(ti => Regex.IsMatch(currentTypeSig.FullName, ti)))
 				{
+					fileContent.AppendLine(CreateStubClass(allDefinedTypes[currentTypeSig.FullName].Name, outputFileConfig));
 					continue;
 				}
 
@@ -181,7 +194,6 @@ namespace GenerateTSModelsFromCS
 				typesFoundForFile.Add(currentTypeSig);
 				var output = currentType.IsEnum ? ProcessEnum(currentType) : ProcessClass(currentType, typesToFind, options, outputFileConfig);
 				fileContent.AppendLine(output);
-				Console.WriteLine(output);
 			}
 
 			var imports = new StringBuilder();
