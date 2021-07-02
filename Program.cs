@@ -72,6 +72,18 @@ namespace GenerateTSModelsFromCS
 
 		public static string ProcessEnum(TypeDef enumType)
 		{
+			if (enumType.GetEnumUnderlyingType().FullName.Contains("Int32"))
+			{
+				return new StringBuilder()
+					.Append("export enum ")
+					.Append(enumType.Name)
+					.AppendLine(" {")
+					.Append('\t')
+					.AppendLine(string.Join(",\r\n\t", enumType.Fields.Where(f => f.IsLiteral).Select(f => $"{f.Name} = {f.Constant.Value}").ToList()))
+					.AppendLine("}")
+					.ToString();
+			}
+
 			return new StringBuilder()
 				.Append("export enum ")
 				.Append(enumType.Name)
